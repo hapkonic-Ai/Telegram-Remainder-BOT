@@ -7,14 +7,11 @@ export default async function handler(req, res) {
         return res.status(405).send('Method Not Allowed');
     }
 
-    // Security check: Only allow Vercel Cron to hit this route
-    // The header 'x-vercel-cron' is injected by Vercel
-    // You can also check process.env.CRON_SECRET if you set one up.
-    if (process.env.NODE_ENV === 'production') {
-        const authHeader = req.headers.authorization;
-        if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-            return res.status(401).json({ error: 'Unauthorized' });
-        }
+    // Security check: Only allow authorized requests
+    // We check for a secret query parameter ?secret=YOUR_CRON_SECRET passed by external cron services.
+    const cronSecret = process.env.CRON_SECRET;
+    if (cronSecret && req.query.secret !== cronSecret) {
+        return res.status(401).json({ error: 'Unauthorized' });
     }
 
     try {
