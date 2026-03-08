@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "result": {
+    "url": "https://telegram-remainder-bot-1.vercel.app/api/webhook",
+    "has_custom_certificate": false,
+    "pending_update_count": 0,
+    "max_connections": 40,
+    "ip_address": "216.198.79.195"
+  }
+}

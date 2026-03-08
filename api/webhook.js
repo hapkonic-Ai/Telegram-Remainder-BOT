@@ -65,14 +65,14 @@ export default async function handler(req, res) {
                 return res.status(200).send('OK');
             }
 
-            // Parse date/time with chrono relative to user's timezone
-            // We get the current date in the user's timezone, then tell chrono to parse relative to that date.
+            // We spoof the system's Date object so that `chrono` evaluates relative terms 
+            // ("today", "tomorrow", "monday") against the user's current local calendar day.
             const nowInUserTZ = moment().tz(user.timezone);
-            const refDate = nowInUserTZ.toDate();
+            const fakeSystemDateStr = nowInUserTZ.format('YYYY-MM-DDTHH:mm:ss');
+            const fakeSystemDate = new Date(fakeSystemDateStr);
 
-            const parsedResults = chrono.parse(input, refDate, {
-                timezone: moment.tz(user.timezone).utcOffset() // pass the user's utc offset (in minutes) to chrono
-            });
+            // Parse date/time with chrono relative to the spoofed Date
+            const parsedResults = chrono.parse(input, fakeSystemDate, { forwardDate: true });
 
             if (parsedResults.length === 0) {
                 await sendMessage(chatId, "I couldn't understand the time. Try something like 'tomorrow 5pm' or 'in 2 hours'.");
@@ -80,7 +80,28 @@ export default async function handler(req, res) {
             }
 
             const parsedDateObj = parsedResults[0];
-            const dueTime = parsedDateObj.start.date(); // dueTime will be the correct global UTC Date
+            const start = parsedDateObj.start;
+
+            let dueTime;
+            if (start.isCertain('timezoneOffset')) {
+                // If the user provided an explicit timezone (e.g., "12 PM EST"), then chrono's absolute Date is correct
+                dueTime = start.date();
+            } else {
+                // Map the parsed time primitives to the user's timezone implicitly
+                const year = start.get('year') || nowInUserTZ.year();
+                const month = start.get('month') || (nowInUserTZ.month() + 1);
+                const day = start.get('day') || nowInUserTZ.date();
+                const hour = start.get('hour') || 0;
+                const minute = start.get('minute') || 0;
+                const second = start.get('second') || 0;
+                const millisecond = start.get('millisecond') || 0;
+
+                const correctMoment = moment.tz({
+                    year, month: month - 1, date: day, hour, minute, second, millisecond
+                }, user.timezone);
+
+                dueTime = correctMoment.toDate(); // Correct global UTC absolute time
+            }
 
             // The text AFTER the parsed time date
             // "tomorrow 5pm buy milk" -> the parsed text is "tomorrow 5pm", leaving " buy milk"
